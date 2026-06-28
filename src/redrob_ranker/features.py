@@ -1,7 +1,6 @@
 import math
-import re
 from datetime import date
-
+import re
 
 REFERENCE_DATE = date(2026, 6, 28)
 
@@ -171,33 +170,38 @@ NON_TARGET_TITLES = [
 
 CV_SPEECH_TERMS = ["computer vision", "image classification", "speech recognition", "tts", "robotics", "gan"]
 
+# Precompute lists, sets, and regexes for speed
+RELEVANT_SKILL_TERMS = tuple(CORE_EVIDENCE_TERMS + INFRA_TERMS + EVAL_TERMS)
+PROFICIENCY_SCORES = {"beginner": 0.2, "intermediate": 0.45, "advanced": 0.75, "expert": 1.0}
+LOG_61 = math.log(61)
+
+# Precompile regex for skill matching
+RELEVANT_SKILL_PAT = re.compile("|".join(re.escape(term) for term in RELEVANT_SKILL_TERMS))
 
 def normalize(text):
-    return re.sub(r"\s+", " ", (text or "").lower())
-
+    if not text:
+        return ""
+    return " ".join(text.lower().split())
 
 def bounded(value, low=0.0, high=1.0):
     return max(low, min(high, value))
 
-
 def count_terms(text, terms):
     return sum(1 for term in terms if term in text)
 
-
 def parse_date(value):
     try:
-        year, month, day = map(int, value.split("-"))
-        return date(year, month, day)
+        parts = value.split("-")
+        return int(parts[0]), int(parts[1])
     except Exception:
         return None
-
 
 def months_since(value):
     parsed = parse_date(value)
     if not parsed:
         return 24
-    return max(0, (REFERENCE_DATE.year - parsed.year) * 12 + REFERENCE_DATE.month - parsed.month)
-
+    year, month = parsed
+    return max(0, (2026 - year) * 12 + 6 - month)
 
 def skill_quality(skills, assessments):
     if not skills:
@@ -206,16 +210,17 @@ def skill_quality(skills, assessments):
     relevant = []
     impossible = 0
     for skill in skills:
-        name = normalize(skill.get("name"))
+        skill_name = skill.get("name") or ""
+        name = normalize(skill_name)
         duration = skill.get("duration_months", 0) or 0
         proficiency = skill.get("proficiency", "")
         endorsements = skill.get("endorsements", 0) or 0
-        is_relevant = any(term in name for term in CORE_EVIDENCE_TERMS + INFRA_TERMS + EVAL_TERMS)
+        is_relevant = bool(RELEVANT_SKILL_PAT.search(name))
         if is_relevant:
-            prof_score = {"beginner": 0.2, "intermediate": 0.45, "advanced": 0.75, "expert": 1.0}.get(proficiency, 0.3)
+            prof_score = PROFICIENCY_SCORES.get(proficiency, 0.3)
             duration_score = bounded(duration / 48)
-            endorsement_score = bounded(math.log1p(endorsements) / math.log(61))
-            assessment_score = assessments.get(skill.get("name"), assessments.get(skill.get("name", "").lower(), None))
+            endorsement_score = bounded(math.log1p(endorsements) / LOG_61)
+            assessment_score = assessments.get(skill_name, assessments.get(skill_name.lower(), None))
             if assessment_score is not None:
                 assessment_component = bounded(float(assessment_score) / 100)
             else:
@@ -228,7 +233,6 @@ def skill_quality(skills, assessments):
         return 0.0, 0, impossible
     return sum(sorted(relevant, reverse=True)[:8]) / min(len(relevant), 8), len(relevant), impossible
 
-
 def extract_features(candidate):
     profile = candidate["profile"]
     signals = candidate["redrob_signals"]
@@ -237,31 +241,48 @@ def extract_features(candidate):
     assessments = signals.get("skill_assessment_scores", {})
 
     history_text = " ".join(
-        f"{item.get('title', '')} {item.get('industry', '')} {item.get('description', '')}" for item in history
+        f"{item.get('title') or ''} {item.get('industry') or ''} {item.get('description') or ''}" for item in history
     )
-    skills_text = " ".join(skill.get("name", "") for skill in skills)
-    profile_text = " ".join(
-        [
-            profile.get("headline", ""),
-            profile.get("summary", ""),
-            profile.get("current_title", ""),
-            profile.get("current_industry", ""),
-        ]
-    )
-    all_text = normalize(f"{profile_text} {history_text} {skills_text}")
+    skills_text = " ".join(skill.get("name") or "" for skill in skills)
+    profile_text = f"{profile.get('headline') or ''} {profile.get('summary') or ''} {profile.get('current_title') or ''} {profile.get('current_industry') or ''}"
+    
     career_only_text = normalize(f"{profile_text} {history_text}")
+    skills_text_norm = normalize(skills_text)
+    all_text = f"{career_only_text} {skills_text_norm}"
 
-    companies = [item.get("company", "") for item in history]
-    service_roles = sum(1 for company in companies if company in SERVICE_COMPANIES)
-    product_roles = sum(1 for company in companies if company in PRODUCT_COMPANIES)
-    service_only = bool(companies) and service_roles == len(companies)
+    num_roles = len(history)
+    service_roles = 0
+    product_roles = 0
+    short_hops = 0
+    for item in history:
+        company = item.get("company", "")
+        if company in SERVICE_COMPANIES:
+            service_roles += 1
+        if company in PRODUCT_COMPANIES:
+            product_roles += 1
+        duration = item.get("duration_months", 0) or 0
+        if duration and duration < 18:
+            short_hops += 1
+
+    service_only = num_roles > 0 and service_roles == num_roles
+    hop_risk = bounded(short_hops / max(1, num_roles))
 
     current_title = normalize(profile.get("current_title", ""))
     headline = normalize(profile.get("headline", ""))
-    title_fit = max(
-        [1.0 if pattern in current_title else 0.75 if pattern in headline else 0.0 for pattern in RELEVANT_TITLE_PATTERNS]
-    )
-    non_target_title = any(title in current_title for title in NON_TARGET_TITLES)
+    
+    title_fit = 0.0
+    for pattern in RELEVANT_TITLE_PATTERNS:
+        if pattern in current_title:
+            title_fit = 1.0
+            break
+        elif title_fit < 0.75 and pattern in headline:
+            title_fit = 0.75
+
+    non_target_title = False
+    for title in NON_TARGET_TITLES:
+        if title in current_title:
+            non_target_title = True
+            break
 
     years = float(profile.get("years_of_experience", 0) or 0)
     experience_fit = bounded(1 - abs(years - 7) / 5)
@@ -272,14 +293,19 @@ def extract_features(candidate):
 
     location = normalize(profile.get("location", ""))
     country = profile.get("country", "")
-    if country == "India" and any(city in location for city in PREFERRED_CITIES):
-        location_fit = 1.0
-    elif country == "India" and any(city in location for city in ADJACENT_INDIA_CITIES):
-        location_fit = 0.7
-    elif country == "India":
+    
+    location_fit = 0.05
+    if country == "India":
         location_fit = 0.55
-    else:
-        location_fit = 0.05
+        for city in PREFERRED_CITIES:
+            if city in location:
+                location_fit = 1.0
+                break
+        if location_fit == 0.55:
+            for city in ADJACENT_INDIA_CITIES:
+                if city in location:
+                    location_fit = 0.7
+                    break
 
     core_career_hits = count_terms(career_only_text, CORE_EVIDENCE_TERMS)
     infra_career_hits = count_terms(career_only_text, INFRA_TERMS)
@@ -311,10 +337,6 @@ def extract_features(candidate):
 
     profile_completeness = bounded(float(signals.get("profile_completeness_score", 0) or 0) / 100)
     external_validation = 0.5 * github_activity + 0.25 * (1 if signals.get("linkedin_connected") else 0) + 0.25 * profile_completeness
-
-    role_durations = [item.get("duration_months", 0) or 0 for item in history]
-    short_hops = sum(1 for duration in role_durations if duration and duration < 18)
-    hop_risk = bounded(short_hops / max(1, len(role_durations)))
 
     return {
         "candidate_id": candidate["candidate_id"],
