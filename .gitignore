@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyc.*
+.pytest_cache/
+.venv/
+outputs/
+*.log
+
+# Challenge data and archives
+data/
+*.zip
+*.tar.gz
+.DS_Store
+__MACOSX/
+deliverables/
+

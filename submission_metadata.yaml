@@ -1,0 +1,53 @@
+team_name: "redrob-career-first-ranker"
+
+primary_contact:
+  name: "Yash Raj"
+  email: "primary@example.com"
+  phone: "+91-XXXXXXXXXX"
+
+team_members:
+  - name: "Yash Raj"
+    email: "primary@example.com"
+    role: "ML Engineer"
+
+github_repo: "https://github.com/YOUR_USERNAME/redrob-ai-candidate-ranker"
+sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"
+reproduce_command: "python rank.py --candidates ./data/[PUB] India_runs_data_and_ai_challenge/India_runs_data_and_ai_challenge/candidates.jsonl --out ./submission.csv"
+
+compute:
+  platform: "Local Windows machine"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.11"
+  os: "Windows"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+ai_tools_used:
+  - "ChatGPT"
+  - "Codex"
+
+ai_usage_summary: |
+  Used AI assistance to inspect the bundle, design the ranking rubric, write code,
+  and prepare the explanatory deck. No hosted LLM or network call is used during
+  candidate ranking.
+
+methodology_summary: |
+  Career-first ranker for the Senior AI Engineer JD. The system extracts evidence
+  from profile summaries and career descriptions, prioritizing production search,
+  retrieval, ranking, recommender, embeddings, vector infrastructure, and ranking
+  evaluation experience. Skills are treated as supporting evidence only. Behavioral
+  Redrob signals act as an availability multiplier, while services-only histories,
+  keyword stuffing, inactivity, long notice periods, and honeypot-like skill
+  contradictions are penalized. The result is a deterministic offline CPU ranker
+  that generates a top-100 CSV with candidate-specific reasoning.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true
+
