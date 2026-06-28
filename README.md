@@ -9,6 +9,10 @@ The ranker is built for the challenge constraints:
 - under 5 minutes for 100k candidates
 - reproducible from `candidates.jsonl`
 
+## Demo Video
+
+[Watch the walkthrough](https://1drv.ms/v/c/4c036607c49a6aa8/IQBMcAU0S0rPSJvRqDpt5nZzAfV034fiFyWGg8Jz9hMupkI?e=Fh8001)
+
 ## Approach
 
 The job description asks for a Senior AI Engineer who has shipped production retrieval, ranking, search, recommender, or LLM systems. The dataset intentionally contains candidates with many AI keywords but weak career evidence, so this solution ranks candidates by demonstrated work rather than keyword count.
